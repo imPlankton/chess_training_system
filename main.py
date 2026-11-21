@@ -57,6 +57,26 @@ def save_game(game):
         game.accept(exporter)
 
 
+def load_game():
+    with open("game.pgn", "r", encoding="utf-8") as file:
+        first_game = chess.pgn.read_game(file)
+    return first_game
+
+
+def show_game_moves(game):
+    for i, move in enumerate(game.mainline_moves(), start=1):
+        print(f"{i}. {move.uci()}")
+
+
+def replay_game(game):
+    replay_board = game.board()
+    for move in game.mainline_moves():
+        replay_board.push(move)
+        print(replay_board,'\n')
+
 if __name__ == "__main__":
-    game = play_game()
-    save_game(game)
+    # game = play_game()
+    # save_game(game)
+    loaded_game = load_game()
+    show_game_moves(loaded_game)
+    replay_game(loaded_game)
