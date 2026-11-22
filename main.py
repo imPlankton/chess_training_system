@@ -91,11 +91,13 @@ def replay_game(game):
 
 
 def get_game_positions(game):
-    positions = []
     board = game.board()
+    positions = [board.copy()]
+
     for move in game.mainline_moves():
         board.push(move)
         positions.append(board.copy())
+
     return positions
 
 
@@ -105,20 +107,28 @@ def analyze_position(position, engine):
     position,
     chess.engine.Limit(depth=12),
     )
+
     white_score = info["score"].white()
+
     if white_score.is_mate():
         n = white_score.mate()
+
         if n>0:
             print(f"Mate in {n} for white.")
+
         elif n<0:
             print(f"Mate in {-n} for black.")
+
         else:
             print("There is already a mate.")
+
     else:
         score = white_score.score() / 100
         print(f"Position evaluation: {score:+.2f}")
+
     if not info.get("pv"):
         print("No best move available.")
+
     else:
         best_move = info["pv"][0]
         print(f"Best move: {best_move.uci()}")
@@ -126,18 +136,52 @@ def analyze_position(position, engine):
     return info
 
 
+def calculate_eval_loss(before_score, after_score, player_color):
+
+    if player_color == chess.WHITE and before_score > after_score:
+        eval_score = before_score - after_score
+    elif player_color == chess.BLACK and after_score > before_score:
+        eval_score = after_score - before_score
+    else:
+        eval_score = 0.0
+    return eval_score
+
+
 def analyze_game(game):
     positions = get_game_positions(game)
     engine = chess.engine.SimpleEngine.popen_uci(
         "engines/stockfish/stockfish-windows-x86-64-universal.exe"
     )
+    evaluations = []
+
     try:
-        for i, position in enumerate(positions,start=1):
-            print(f"Position{i}:")
-            analyze_position(position, engine)
-            print()
+        for position in positions:
+            evaluation = analyze_position(position, engine)
+            evaluations.append(
+                evaluation["score"].white().score() / 100
+            )
+
+        for i in range(len(positions) - 1):
+            before_position = positions[i]
+
+            before_score = evaluations[i]
+            after_score = evaluations[i+1]
+
+            player_color = before_position.turn
+
+            eval_loss = calculate_eval_loss(before_score,
+                                            after_score,
+                                            player_color)
+
+            print(f"Move {i+1} | Evaluation loss: {eval_loss:.2f}")
+
+        # for i, position in enumerate(positions,start=1):
+        #     print(f"Position{i}:")
+        #     analyze_position(position, engine)
+        #     print()
     finally:
         engine.quit()
+
 
 
 if __name__ == "__main__":
