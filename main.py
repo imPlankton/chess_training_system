@@ -147,6 +147,17 @@ def calculate_eval_loss(before_score, after_score, player_color):
     return eval_score
 
 
+def classify_move(eval_loss):
+    if eval_loss <= 0.20:
+        return "Good"
+    elif eval_loss <= 0.50:
+        return "Inaccuracy"
+    elif eval_loss <= 1.0:
+        return "Mistake"
+    else:
+        return "Blunder"
+
+
 def analyze_game(game):
     positions = get_game_positions(game)
     engine = chess.engine.SimpleEngine.popen_uci(
@@ -161,6 +172,21 @@ def analyze_game(game):
                 evaluation["score"].white().score() / 100
             )
 
+        statistics = {
+            "White": {
+                "Good": 0,
+                "Inaccuracy": 0,
+                "Mistake": 0,
+                "Blunder": 0
+            },
+            "Black": {
+                "Good": 0,
+                "Inaccuracy": 0,
+                "Mistake": 0,
+                "Blunder": 0
+            }
+        }
+
         for i in range(len(positions) - 1):
             before_position = positions[i]
 
@@ -168,32 +194,33 @@ def analyze_game(game):
             after_score = evaluations[i+1]
 
             player_color = before_position.turn
+            if player_color == chess.WHITE:
+                player = "White"
+            else:
+                player = "Black"
 
             eval_loss = calculate_eval_loss(before_score,
                                             after_score,
                                             player_color)
 
-            print(f"Move {i+1} | Evaluation loss: {eval_loss:.2f}")
+            category = classify_move(eval_loss)
+            statistics[player][category] += 1
 
-        # for i, position in enumerate(positions,start=1):
-        #     print(f"Position{i}:")
-        #     analyze_position(position, engine)
-        #     print()
+            print(f"Move {i+1} | "
+                  f"Evaluation loss: {eval_loss:.2f} | "
+                  f"Category: {category}")
+
+        for player, player_stats in statistics.items():
+
+            print(f"\n{player}: ")
+
+            for key, value in player_stats.items():
+                print(f" {key}: {value}")
+
     finally:
         engine.quit()
 
 
-
 if __name__ == "__main__":
-    # game = play_game()
-    # save_game(game)
     loaded_game = load_game()
-    # show_game_moves(loaded_game)
-    # replay_game(loaded_game)
-    # positions = get_game_positions(loaded_game)
-    # for i, board in enumerate(positions, start=1):
-    #     print(f"Position {i}:")
-    #     print(board)
-    #     print()
-    print()
     analyze_game(loaded_game)
