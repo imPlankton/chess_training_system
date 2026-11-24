@@ -136,6 +136,10 @@ def analyze_position(position, engine):
     return info
 
 
+def normalize_score(white_score):
+    return white_score.score(mate_score=100000) / 100
+
+
 def calculate_eval_loss(before_score, after_score, player_color):
 
     if player_color == chess.WHITE and before_score > after_score:
@@ -157,6 +161,27 @@ def classify_move(eval_loss):
     else:
         return "Blunder"
 
+def find_blunders(move_results,player):
+    blunders = []
+    for data in move_results:
+        if data["category"] == "Blunder" and data["player"] == player:
+            blunders.append(data)
+    return blunders
+
+
+def calculate_acpl(move_results, player):
+    total_loss = 0
+    move_count = 0
+    for move_result in move_results:
+        if (move_result["player"] == player
+                and move_result["before_is_mate"] is False
+                and move_result["after_is_mate"] is False) :
+            move_count+=1
+            total_loss += move_result["eval_loss"]
+    if move_count == 0:
+        return None
+    return total_loss / move_count * 100
+
 
 def analyze_game(game):
     positions = get_game_positions(game)
@@ -165,12 +190,18 @@ def analyze_game(game):
     )
     evaluations = []
 
+    mate_flags = []
+
+    moves = [move for move in game.mainline_moves()]
+    move_results = []
     try:
         for position in positions:
             evaluation = analyze_position(position, engine)
+            white_score = evaluation["score"].white()
             evaluations.append(
-                evaluation["score"].white().score() / 100
-            )
+                normalize_score(
+                    white_score))
+            mate_flags.append(white_score.is_mate())
 
         statistics = {
             "White": {
@@ -194,6 +225,7 @@ def analyze_game(game):
             after_score = evaluations[i+1]
 
             player_color = before_position.turn
+
             if player_color == chess.WHITE:
                 player = "White"
             else:
@@ -205,6 +237,18 @@ def analyze_game(game):
 
             category = classify_move(eval_loss)
             statistics[player][category] += 1
+
+            move_data = {"move_number": i + 1,
+                         "move": moves[i].uci(),
+                         "player": player,
+                         "category": category,
+                         "before_score": before_score,
+                         "after_score": after_score,
+                         "eval_loss": eval_loss,
+                         "before_is_mate": mate_flags[i],
+                         "after_is_mate": mate_flags[i+1]
+                         }
+            move_results.append(move_data)
 
             print(f"Move {i+1} | "
                   f"Evaluation loss: {eval_loss:.2f} | "
@@ -220,7 +264,27 @@ def analyze_game(game):
     finally:
         engine.quit()
 
+    return move_results
 
 if __name__ == "__main__":
     loaded_game = load_game()
-    analyze_game(loaded_game)
+    results = analyze_game(loaded_game)
+
+    white_blunders = find_blunders(results, "White")
+    black_blunders = find_blunders(results, "Black")
+
+    print(white_blunders)
+    print(black_blunders)
+
+    white_acpl = calculate_acpl(results, "White")
+    black_acpl = calculate_acpl(results, "Black")
+
+    if white_acpl is not None:
+        print(f"White ACPL: {white_acpl:.2f}")
+    else:
+        print("White ACPL: N/A")
+
+    if black_acpl is not None:
+        print(f"Black ACPL: {black_acpl:.2f}")
+    else:
+        print("Black ACPL: N/A")
